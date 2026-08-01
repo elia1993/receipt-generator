@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מחולל קבלות PDF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --border: #e0e2e7;
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --danger: #e53e3e;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin: 0 0 20px;
+    font-size: 0.9rem;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  @media (min-width: 900px) {
+    .layout {
+      grid-template-columns: 380px 1fr;
+      align-items: start;
+    }
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .panel h2 {
+    font-size: 1.05rem;
+    margin: 0 0 12px;
+  }
+  .controls-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: sticky;
+    top: 16px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.95rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.15s ease;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+    width: 100%;
+  }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-primary:disabled {
+    background: #a9b6cc;
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    background: #eef1f6;
+    color: var(--text);
+    border: 1px solid var(--border);
+    width: 100%;
+  }
+  .btn-secondary:hover { background: #e3e7ee; }
+
+  input[type=file] { display: none; }
+
+  .library-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 420px;
+    overflow-y: auto;
+    padding-inline-end: 4px;
+  }
+  .library-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+  }
+  .library-item img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #f0f0f0;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .library-item .name {
+    flex: 1;
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .qty-control {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .qty-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #f7f8fa;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .qty-btn:hover { background: #eceff3; }
+  .qty-input {
+    width: 34px;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 2px;
+    font-size: 0.9rem;
+  }
+  .library-empty, .missing-note {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .preview-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .preview-item {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #fafafa;
+  }
+  .preview-item img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .preview-item .badge {
+    position: absolute;
+    top: 8px;
+    inset-inline-start: 8px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+  }
+  .preview-item .fixed-badge {
+    position: absolute;
+    top: 8px;
+    inset-inline-start: 8px;
+    background: rgba(37,99,235,0.85);
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+  }
+  .remove-btn {
+    position: absolute;
+    top: 8px;
+    inset-inline-end: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: var(--danger);
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .remove-btn:hover { background: #c53030; }
+
+  .status-msg {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 8px;
+    min-height: 1.2em;
+  }
+  .status-msg.error { color: var(--danger); }
+
+  .broken-img {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    background: #fdecec;
+    color: #b91c1c;
+    font-size: 0.8rem;
+    text-align: center;
+    padding: 8px;
+  }
+</style>
+</head>
+<body>
+
+<h1>מחולל קבלות ל-PDF</h1>
+<p class="subtitle">הוסיפו קבלות, סדרו אותן ברשימה והורידו קובץ PDF אחד המכיל את כולן.</p>
+
+<div class="layout">
+
+  <div class="controls-col">
+
+    <div class="panel">
+      <h2>הוספת קבלה</h2>
+      <button type="button" class="btn btn-secondary" id="uploadBtn">📁 העלאת קבלה מהמכשיר</button>
+      <input type="file" id="fileInput" accept="image/*" multiple>
+    </div>
+
+    <div class="panel">
+      <h2>ספריית קבלות שמורות</h2>
+      <div id="libraryList" class="library-list"></div>
+    </div>
+
+    <div class="panel">
+      <button type="button" class="btn btn-primary" id="downloadBtn">⬇️ הורדה כ-PDF</button>
+      <div id="statusMsg" class="status-msg"></div>
+    </div>
+
+  </div>
+
+  <div class="panel">
+    <h2>תצוגה מקדימה (<span id="itemCount">0</span> עמודים)</h2>
+    <div id="previewList" class="preview-list"></div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ----- Configuration -----
+  var FIXED_IMAGE = "template_receipt.jpg";
+  var LIBRARY_DIR = "receipts/";
+  // Hardcoded list of files in receipts/ (update this manually if files are
+  // added/removed — no server or fetch() needed, works from file://).
+  var LIBRARY_FILES = [
+    "receipt7.jpg",
+    "receipts1.jpg",
+    "receipts2.jpg",
+    "receipts3.jpg",
+    "receipts4.jpg",
+    "receipts5.jpg",
+    "receipts6.jpg"
+  ];
+
+  // ----- State -----
+  // items: array of { id, src, isFixed, sourceLabel }
+  var items = [];
+  var idCounter = 0;
+  var libraryQty = {}; // filename -> current quantity
+
+  function nextId() {
+    idCounter += 1;
+    return idCounter;
+  }
+
+  // ----- DOM refs -----
+  var previewListEl = document.getElementById("previewList");
+  var itemCountEl = document.getElementById("itemCount");
+  var libraryListEl = document.getElementById("libraryList");
+  var uploadBtn = document.getElementById("uploadBtn");
+  var fileInput = document.getElementById("fileInput");
+  var downloadBtn = document.getElementById("downloadBtn");
+  var statusMsg = document.getElementById("statusMsg");
+
+  function setStatus(msg, isError) {
+    statusMsg.textContent = msg || "";
+    statusMsg.className = "status-msg" + (isError ? " error" : "");
+  }
+
+  // ----- Init fixed image -----
+  function initFixedImage() {
+    items.push({
+      id: nextId(),
+      src: FIXED_IMAGE,
+      isFixed: true,
+      sourceLabel: "קבועה"
+    });
+    renderPreview();
+  }
+
+  // ----- Upload from device -----
+  uploadBtn.addEventListener("click", function () {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener("change", function (e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
+    if (!files.length) return;
+
+    files.forEach(function (file) {
+      if (!file.type || file.type.indexOf("image/") !== 0) return;
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        items.push({
+          id: nextId(),
+          src: ev.target.result,
+          isFixed: false,
+          sourceLabel: "הועלה"
+        });
+        renderPreview();
+      };
+      reader.onerror = function () {
+        setStatus("שגיאה בקריאת אחד הקבצים שנבחרו.", true);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // allow re-selecting the same file again later
+    fileInput.value = "";
+  });
+
+  // ----- Library -----
+  function buildLibrary() {
+    renderLibraryList(LIBRARY_FILES);
+  }
+
+  function renderLibraryList(filenames) {
+    if (!filenames.length) {
+      libraryListEl.innerHTML = '<div class="library-empty">לא נמצאו קבלות בספרייה.</div>';
+      return;
+    }
+
+    filenames.forEach(function (filename) {
+      libraryQty[filename] = 0;
+
+      var row = document.createElement("div");
+      row.className = "library-item";
+
+      var img = document.createElement("img");
+      img.src = LIBRARY_DIR + filename;
+      img.alt = filename;
+      img.onerror = function () {
+        img.replaceWith(Object.assign(document.createElement("div"), {
+          className: "missing-note",
+          textContent: "⚠️ לא נמצא"
+        }));
+      };
+
+      var name = document.createElement("div");
+      name.className = "name";
+      name.textContent = filename;
+
+      var qtyWrap = document.createElement("div");
+      qtyWrap.className = "qty-control";
+
+      var minusBtn = document.createElement("button");
+      minusBtn.type = "button";
+      minusBtn.className = "qty-btn";
+      minusBtn.textContent = "−";
+
+      var qtyInput = document.createElement("input");
+      qtyInput.type = "number";
+      qtyInput.className = "qty-input";
+      qtyInput.min = "0";
+      qtyInput.value = "0";
+
+      var plusBtn = document.createElement("button");
+      plusBtn.type = "button";
+      plusBtn.className = "qty-btn";
+      plusBtn.textContent = "+";
+
+      function applyQty(newQty) {
+        newQty = Math.max(0, Math.floor(Number(newQty) || 0));
+        libraryQty[filename] = newQty;
+        qtyInput.value = String(newQty);
+        syncLibraryItemInList(filename, newQty);
+      }
+
+      minusBtn.addEventListener("click", function () {
+        applyQty(libraryQty[filename] - 1);
+      });
+      plusBtn.addEventListener("click", function () {
+        applyQty(libraryQty[filename] + 1);
+      });
+      qtyInput.addEventListener("change", function () {
+        applyQty(qtyInput.value);
+      });
+
+      qtyWrap.appendChild(minusBtn);
+      qtyWrap.appendChild(qtyInput);
+      qtyWrap.appendChild(plusBtn);
+
+      row.appendChild(img);
+      row.appendChild(name);
+      row.appendChild(qtyWrap);
+      libraryListEl.appendChild(row);
+    });
+  }
+
+  // Keep the number of instances of a given library file in `items` in sync
+  // with its requested quantity, without touching manually-added duplicates
+  // or other library files. Newly needed copies are appended to the end of
+  // the list; excess copies are removed starting from the last occurrence.
+  function syncLibraryItemInList(filename, targetQty) {
+    var src = LIBRARY_DIR + filename;
+    var indices = [];
+    items.forEach(function (item, idx) {
+      if (!item.isFixed && item.libraryFile === filename) indices.push(idx);
+    });
+
+    var currentQty = indices.length;
+
+    if (currentQty < targetQty) {
+      var toAdd = targetQty - currentQty;
+      for (var i = 0; i < toAdd; i++) {
+        items.push({
+          id: nextId(),
+          src: src,
+          isFixed: false,
+          libraryFile: filename,
+          sourceLabel: "ספרייה"
+        });
+      }
+    } else if (currentQty > targetQty) {
+      var toRemove = currentQty - targetQty;
+      for (var j = 0; j < toRemove; j++) {
+        var removeIdx = indices[indices.length - 1 - j];
+        items.splice(removeIdx, 1);
+      }
+    }
+
+    renderPreview();
+  }
+
+  // ----- Preview -----
+  function renderPreview() {
+    previewListEl.innerHTML = "";
+    itemCountEl.textContent = String(items.length);
+
+    items.forEach(function (item, index) {
+      var wrap = document.createElement("div");
+      wrap.className = "preview-item";
+
+      var badge = document.createElement("div");
+      badge.className = item.isFixed ? "fixed-badge" : "badge";
+      badge.textContent = (index + 1);
+      wrap.appendChild(badge);
+
+      var img = document.createElement("img");
+      img.src = item.src;
+      img.alt = "קבלה " + (index + 1);
+      img.onerror = function () {
+        var brokenDiv = document.createElement("div");
+        brokenDiv.className = "broken-img";
+        brokenDiv.textContent = "⚠️ לא ניתן לטעון תמונה זו";
+        img.replaceWith(brokenDiv);
+      };
+      wrap.appendChild(img);
+
+      if (!item.isFixed) {
+        var removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "remove-btn";
+        removeBtn.title = "הסר קבלה זו מהרשימה";
+        removeBtn.textContent = "✕";
+        removeBtn.addEventListener("click", function () {
+          removeItemInstance(item.id);
+        });
+        wrap.appendChild(removeBtn);
+      }
+
+      previewListEl.appendChild(wrap);
+    });
+
+    setStatus("");
+  }
+
+  function removeItemInstance(id) {
+    var idx = items.findIndex(function (it) { return it.id === id; });
+    if (idx === -1) return;
+    items.splice(idx, 1);
+    renderPreview();
+  }
+
+  // ----- PDF generation -----
+  function loadImageDimensions(src) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.onerror = function () {
+        reject(new Error("לא ניתן לטעון את התמונה: " + src));
+      };
+      img.src = src;
+    });
+  }
+
+  function detectImageFormat(src) {
+    var lower = src.toLowerCase();
+    if (lower.indexOf("image/png") !== -1 || lower.endsWith(".png")) return "PNG";
+    if (lower.indexOf("image/webp") !== -1 || lower.endsWith(".webp")) return "WEBP";
+    return "JPEG";
+  }
+
+  downloadBtn.addEventListener("click", function () {
+    if (!items.length) {
+      setStatus("אין קבלות ברשימה להורדה.", true);
+      return;
+    }
+
+    var jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDFCtor) {
+      setStatus("שגיאה: ספריית יצירת ה-PDF לא נטענה. בדקו את החיבור לאינטרנט.", true);
+      return;
+    }
+
+    downloadBtn.disabled = true;
+    setStatus("מכין את קובץ ה-PDF...");
+
+    var pdf = null;
+    var chain = Promise.resolve();
+
+    items.forEach(function (item, index) {
+      chain = chain.then(function () {
+        return loadImageDimensions(item.src).then(function (dims) {
+          var format = detectImageFormat(item.src);
+          var orientation = dims.width >= dims.height ? "l" : "p";
+          var pageSize = [dims.width, dims.height];
+
+          if (!pdf) {
+            pdf = new jsPDFCtor({
+              orientation: orientation,
+              unit: "px",
+              format: pageSize
+            });
+          } else {
+            pdf.addPage(pageSize, orientation);
+          }
+
+          pdf.addImage(item.src, format, 0, 0, dims.width, dims.height);
+        }).catch(function (err) {
+          throw new Error("שגיאה בטעינת קבלה מספר " + (index + 1) + ": " + err.message);
+        });
+      });
+    });
+
+    chain.then(function () {
+      pdf.save("receipts.pdf");
+      setStatus("קובץ ה-PDF הורד בהצלחה.");
+    }).catch(function (err) {
+      setStatus(err.message || "אירעה שגיאה ביצירת קובץ ה-PDF.", true);
+    }).finally(function () {
+      downloadBtn.disabled = false;
+    });
+  });
+
+  // ----- Boot -----
+  initFixedImage();
+  buildLibrary();
+})();
+</script>
+
+</body>
+</html>
