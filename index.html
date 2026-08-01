@@ -542,6 +542,11 @@
     return "JPEG";
   }
 
+  // Page layout constants (all in mm, since the PDF is created with unit "mm").
+  var MARGIN_X = 10; // left/right margin — every image gets the same usable width
+  var MARGIN_Y = 10; // top/bottom margin
+  var IMAGE_SPACING = 3; // vertical gap between consecutively stacked images on the same page
+
   downloadBtn.addEventListener("click", function () {
     if (!items.length) {
       setStatus("אין קבלות ברשימה להורדה.", true);
@@ -557,27 +562,41 @@
     downloadBtn.disabled = true;
     setStatus("מכין את קובץ ה-PDF...");
 
-    var pdf = null;
+    var pdf = new jsPDFCtor({ orientation: "p", unit: "mm", format: "a4" });
+    var pageWidth = pdf.internal.pageSize.getWidth();
+    var pageHeight = pdf.internal.pageSize.getHeight();
+    var usableWidth = pageWidth - (2 * MARGIN_X);
+    var usableBottom = pageHeight - MARGIN_Y;
+
+    // cursorY tracks where the next image would start on the current page.
+    // It equals MARGIN_Y exactly when the page is still empty.
+    var cursorY = MARGIN_Y;
+
     var chain = Promise.resolve();
 
     items.forEach(function (item, index) {
       chain = chain.then(function () {
         return loadImageDimensions(item.src).then(function (dims) {
           var format = detectImageFormat(item.src);
-          var orientation = dims.width >= dims.height ? "l" : "p";
-          var pageSize = [dims.width, dims.height];
+          // Fixed width for every image; height follows the image's own
+          // aspect ratio so nothing gets stretched or distorted.
+          var renderWidth = usableWidth;
+          var renderHeight = usableWidth * (dims.height / dims.width);
 
-          if (!pdf) {
-            pdf = new jsPDFCtor({
-              orientation: orientation,
-              unit: "px",
-              format: pageSize
-            });
-          } else {
-            pdf.addPage(pageSize, orientation);
+          var pageHasContent = cursorY > MARGIN_Y;
+          var spacingNeeded = pageHasContent ? IMAGE_SPACING : 0;
+          var wouldEndAt = cursorY + spacingNeeded + renderHeight;
+
+          if (pageHasContent && wouldEndAt > usableBottom) {
+            pdf.addPage();
+            cursorY = MARGIN_Y;
+            spacingNeeded = 0;
           }
 
-          pdf.addImage(item.src, format, 0, 0, dims.width, dims.height);
+          var y = cursorY + spacingNeeded;
+          // Same X for every image — true left alignment, no per-image centering.
+          pdf.addImage(item.src, format, MARGIN_X, y, renderWidth, renderHeight);
+          cursorY = y + renderHeight;
         }).catch(function (err) {
           throw new Error("שגיאה בטעינת קבלה מספר " + (index + 1) + ": " + err.message);
         });
