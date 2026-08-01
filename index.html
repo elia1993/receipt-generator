@@ -543,9 +543,10 @@
   }
 
   // Page layout constants (all in mm, since the PDF is created with unit "mm").
-  var MARGIN_X = 10; // left/right margin — every image gets the same usable width
+  var PAGE_WIDTH = 210; // fixed page width (A4 width) — every image gets the same usable width
+  var MARGIN_X = 10; // left/right margin
   var MARGIN_Y = 10; // top/bottom margin
-  var IMAGE_SPACING = 3; // vertical gap between consecutively stacked images on the same page
+  var usableWidth = PAGE_WIDTH - (2 * MARGIN_X);
 
   downloadBtn.addEventListener("click", function () {
     if (!items.length) {
@@ -562,48 +563,42 @@
     downloadBtn.disabled = true;
     setStatus("מכין את קובץ ה-PDF...");
 
-    var pdf = new jsPDFCtor({ orientation: "p", unit: "mm", format: "a4" });
-    var pageWidth = pdf.internal.pageSize.getWidth();
-    var pageHeight = pdf.internal.pageSize.getHeight();
-    var usableWidth = pageWidth - (2 * MARGIN_X);
-    var usableBottom = pageHeight - MARGIN_Y;
+    // Load every image's natural dimensions first so we can size a single
+    // page tall enough to fit all of them stacked back-to-back — no page
+    // breaks, no gaps between images.
+    Promise.all(
+      items.map(function (item, index) {
+        return loadImageDimensions(item.src)
+          .then(function (dims) {
+            return {
+              src: item.src,
+              format: detectImageFormat(item.src),
+              renderWidth: usableWidth,
+              renderHeight: usableWidth * (dims.height / dims.width)
+            };
+          })
+          .catch(function (err) {
+            throw new Error("שגיאה בטעינת קבלה מספר " + (index + 1) + ": " + err.message);
+          });
+      })
+    ).then(function (placements) {
+      var totalHeight = placements.reduce(function (sum, p) { return sum + p.renderHeight; }, 0);
+      var pageHeight = (2 * MARGIN_Y) + totalHeight;
 
-    // cursorY tracks where the next image would start on the current page.
-    // It equals MARGIN_Y exactly when the page is still empty.
-    var cursorY = MARGIN_Y;
-
-    var chain = Promise.resolve();
-
-    items.forEach(function (item, index) {
-      chain = chain.then(function () {
-        return loadImageDimensions(item.src).then(function (dims) {
-          var format = detectImageFormat(item.src);
-          // Fixed width for every image; height follows the image's own
-          // aspect ratio so nothing gets stretched or distorted.
-          var renderWidth = usableWidth;
-          var renderHeight = usableWidth * (dims.height / dims.width);
-
-          var pageHasContent = cursorY > MARGIN_Y;
-          var spacingNeeded = pageHasContent ? IMAGE_SPACING : 0;
-          var wouldEndAt = cursorY + spacingNeeded + renderHeight;
-
-          if (pageHasContent && wouldEndAt > usableBottom) {
-            pdf.addPage();
-            cursorY = MARGIN_Y;
-            spacingNeeded = 0;
-          }
-
-          var y = cursorY + spacingNeeded;
-          // Same X for every image — true left alignment, no per-image centering.
-          pdf.addImage(item.src, format, MARGIN_X, y, renderWidth, renderHeight);
-          cursorY = y + renderHeight;
-        }).catch(function (err) {
-          throw new Error("שגיאה בטעינת קבלה מספר " + (index + 1) + ": " + err.message);
-        });
+      var pdf = new jsPDFCtor({
+        orientation: "p",
+        unit: "mm",
+        format: [PAGE_WIDTH, pageHeight]
       });
-    });
 
-    chain.then(function () {
+      var y = MARGIN_Y;
+      placements.forEach(function (p) {
+        // Same X and same width for every image — true left alignment —
+        // and images are placed flush against each other (no vertical gap).
+        pdf.addImage(p.src, p.format, MARGIN_X, y, p.renderWidth, p.renderHeight);
+        y += p.renderHeight;
+      });
+
       pdf.save("receipts.pdf");
       setStatus("קובץ ה-PDF הורד בהצלחה.");
     }).catch(function (err) {
